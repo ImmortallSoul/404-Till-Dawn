@@ -1,0 +1,19 @@
+avatarModel=True layer31=True mainHides=True mirrorShows=True
+uniqueGunCueGroups=10/10 flameLoop=True extraGroups=4/4 extraClips=20
+fabReadyAssets=11/11 fabClips=9 arenaProps=1344
+Revolver scale=1.25x hands=1/ok cc0=1/1 forearm=1/1
+Shotgun scale=1.25x hands=2/ok cc0=2/2 forearm=2/2
+Crossbow scale=1.25x hands=2/ok cc0=2/2 forearm=2/2
+DualSmgs scale=1.25x hands=2/ok cc0=2/2 forearm=2/2
+Batgun scale=1.25x hands=1/ok cc0=1/1 forearm=1/1
+FlameCannon scale=1.25x hands=2/ok cc0=2/2 forearm=2/2
+GrenadeLauncher scale=1.25x hands=2/ok cc0=2/2 forearm=2/2
+Staff scale=1.25x hands=1/ok cc0=1/1 forearm=1/1
+SalvoKnife scale=1.25x hands=1/ok cc0=1/1 forearm=1/1
+WateringGun scale=1.25x hands=2/ok cc0=2/2 forearm=2/2
+CycloneSword scale=1.25x hands=1/ok cc0=1/1 forearm=1/1
+weaponScale=11/11 handPolicy=11/11 cc0Hands=11/11 forearms=11/11
+smallEnemiesUseReadyModels=2/2
+spawnOutsideFov=30/30
+pauseMenu=True paused=True resumed=True settings=True
+RESULT=PASS

@@ -1,0 +1,22 @@
+﻿FINAL VERIFICATION PROBE - RESULT=PASS
+
+[FinalProbe] probe initialized, playMode=False
+[FinalProbe] Start() requested play mode
+[FinalProbe] setting isPlaying=true
+[FinalProbe] probe initialized, playMode=False
+[FinalProbe] Start() requested play mode
+[FinalProbe] entered play mode
+[FinalProbe] PASS session booted :: ok
+[FinalProbe] PASS arena booted :: root lookup
+[FinalProbe] PASS halloween map :: pumpkins=470 eyes=626 mouths=313 graves=223 fence=87 trees=342 wisps=26 glows=8 fog=0,06,0,07,0,11
+[FinalProbe] PASS player spawned :: (0.00, 0.05, 0.00)
+[FinalProbe] PASS summon manager :: ok
+[FinalProbe] PASS meshy scythe model :: pivot=True mesh=True animators=0 colliders=0 renderers=1 filters=1 verts=2318 activePivot=True summonActive=True bounds=1,84x0,60x1,29
+[FinalProbe] PASS scythe animation :: rotation delta=17,1
+[FinalProbe] PASS enemy model heights :: human=1,78 flyer=1,10 boss=3,50
+[FinalProbe] PASS enemy death :: dead=True timer=2,91 state=Death ragdoll=True bodies=21 moving=21 maxSpeed=58,34
+[FinalProbe] PASS scythe damage :: hp 10000 -> 9933 scytheDist=0,92
+[FinalProbe] PASS soft weapon cues :: groups=10/10 clips=20/20 sample=gun_revolver_soft_01
+[FinalProbe] PASS pause and resume :: paused=True resumed=True
+[FinalProbe] RESULT=PASS
+[FinalProbe] map=True scytheModel=True scytheAnim=True scytheDamage=True enemySize=True deathState=True deathPose=True weaponSounds=True pause=True
