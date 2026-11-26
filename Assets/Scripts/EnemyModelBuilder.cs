@@ -706,7 +706,10 @@ static class EnemyModelBuilder
                 break;
         }
 
-        material = GameMaterials.Create(tint, PaletteEmission(palette), colorMap,
+        // Тіла ворогів мають читатися приблизно як ландшафт поза променем:
+        // емісія лише ледь помітний слід, а не власне джерело світла.
+        Color emission = PaletteEmission(palette) * 0.015f;
+        material = GameMaterials.Create(tint, emission, colorMap,
             new Vector2(1.6f, 1.6f), normalMap, smoothness, metallic);
         _materials[key] = material;
         return material;

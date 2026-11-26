@@ -1,23 +1,24 @@
+using System;
 using UnityEngine;
 
+/// <summary>
+/// Мінімалістичне головне меню: одна центрована колонка, плоскі чіпи,
+/// єдиний акцент — золотий колір обраного елемента.
+/// </summary>
 public class StartMenu : MonoBehaviour
 {
     const float VirtualW = 1280f;
     const float VirtualH = 720f;
 
-    static readonly Color Gold = new Color(1f, 0.79f, 0.42f);
-    static readonly Color Ice = new Color(0.55f, 0.78f, 1f);
+    static readonly Color Gold = new Color(0.91f, 0.73f, 0.42f);
 
     GUIStyle _title;
     GUIStyle _subtitle;
     GUIStyle _section;
-    GUIStyle _text;
-    GUIStyle _small;
-    GUIStyle _hint;
-    GUIStyle _rowName;
-    GUIStyle _cardLetter;
-    GUIStyle _cardName;
+    GUIStyle _chip;
+    GUIStyle _chipSelected;
     GUIStyle _start;
+    GUIStyle _hint;
 
     float _scale = -1f;
     float _ox;
@@ -30,15 +31,45 @@ public class StartMenu : MonoBehaviour
             return;
 
         Prepare();
-        float t = Time.realtimeSinceStartup;
 
-        MenuVisuals.DrawBackground(t);
-        DrawHeader(t);
+        MenuVisuals.DrawMinimalBackground();
 
-        DrawLocationPanel(R(54f, 138f, 330f, 420f));
-        DrawHeroPanel(R(402f, 138f, 476f, 420f));
-        DrawWeaponPanel(R(896f, 138f, 330f, 420f));
-        DrawFooter(session, t);
+        GUI.Label(R(340f, 44f, 600f, 54f), "404 TILL DAWN", _title);
+        GUI.Label(R(360f, 98f, 560f, 24f), "20 ХВИЛИН ДО СВІТАНКУ", _subtitle);
+        MenuVisuals.DrawLine(R(540f, 134f, 200f, 1f), new Color(Gold.r, Gold.g, Gold.b, 0.35f));
+
+        DrawRow("ЛОКАЦІЯ", 166f, LocationNames(), (int)GameSession.SelectedMap, 200f, 10f, i =>
+        {
+            GameSession.SelectedMap = (MapType)i;
+            ArenaBuilder.Build(ArenaBuilder.Size, (MapType)i);
+        });
+
+        DrawRow("ГЕРОЙ", 246f, HeroNames(), HeroIndex(), 132f, 8f, i =>
+        {
+            GameSession.SelectedCharacter = CharacterCatalog.All[i].Id;
+        });
+
+        DrawRow("ЗБРОЯ", 326f, WeaponNames(), WeaponIndex(), 92f, 6f, i =>
+        {
+            GameSession.SelectedWeapon = WeaponCatalog.All[i].Id;
+        });
+
+        DrawRow("ТЕМРЯВА", 406f, DarknessNames(), GameSession.SelectedDarkness, 140f, 8f, i =>
+        {
+            GameSession.SelectedDarkness = i;
+            PrototypeSettings.Set(PrototypeSettings.Darkness, i);
+            PrototypeSettings.Save();
+        });
+
+        Rect start = R(500f, 498f, 280f, 52f);
+        if (MenuVisuals.DrawMinimalButton(start, true, Gold))
+        {
+            Click();
+            session.BeginRun();
+        }
+        GUI.Label(start, "ПОЧАТИ ГРУ", _start);
+
+        GUI.Label(R(340f, 566f, 600f, 24f), "WASD · ЛКМ · ПКМ · 1–4 · Q · E · F1", _hint);
     }
 
     void Prepare()
@@ -62,82 +93,54 @@ public class StartMenu : MonoBehaviour
 
         _title = new GUIStyle(GUI.skin.label)
         {
-            fontSize = F(42),
+            fontSize = F(38),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
         };
-        _title.normal.textColor = new Color(1f, 0.85f, 0.58f);
+        _title.normal.textColor = new Color(0.91f, 0.92f, 0.96f);
 
         _subtitle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = F(15),
+            fontSize = F(13),
             alignment = TextAnchor.MiddleCenter
         };
-        _subtitle.normal.textColor = new Color(0.68f, 0.73f, 0.86f);
+        _subtitle.normal.textColor = new Color(0.55f, 0.59f, 0.68f);
 
         _section = new GUIStyle(GUI.skin.label)
         {
-            fontSize = F(14),
+            fontSize = F(12),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleLeft
         };
-        _section.normal.textColor = Gold;
+        _section.normal.textColor = new Color(0.62f, 0.66f, 0.75f);
 
-        _text = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = F(13),
-            alignment = TextAnchor.UpperLeft,
-            wordWrap = true
-        };
-        _text.normal.textColor = new Color(0.82f, 0.85f, 0.93f);
-
-        _small = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = F(11),
-            alignment = TextAnchor.MiddleLeft,
-            wordWrap = true
-        };
-        _small.normal.textColor = new Color(0.6f, 0.66f, 0.78f);
-
-        _hint = new GUIStyle(GUI.skin.label)
+        _chip = new GUIStyle(GUI.skin.label)
         {
             fontSize = F(12),
             alignment = TextAnchor.MiddleCenter
         };
-        _hint.normal.textColor = new Color(0.56f, 0.62f, 0.75f);
+        _chip.normal.textColor = new Color(0.72f, 0.76f, 0.84f);
 
-        _rowName = new GUIStyle(GUI.skin.label)
+        _chipSelected = new GUIStyle(_chip)
         {
-            fontSize = F(15),
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleLeft
+            fontStyle = FontStyle.Bold
         };
-        _rowName.normal.textColor = Color.white;
-
-        _cardLetter = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = F(21),
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
-        _cardLetter.normal.textColor = Color.white;
-
-        _cardName = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = F(12),
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter,
-            wordWrap = true
-        };
-        _cardName.normal.textColor = new Color(0.92f, 0.94f, 1f);
+        _chipSelected.normal.textColor = Gold;
 
         _start = new GUIStyle(GUI.skin.label)
         {
-            fontSize = F(24),
+            fontSize = F(18),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
         };
-        _start.normal.textColor = new Color(1f, 0.91f, 0.66f);
+        _start.normal.textColor = Gold;
+
+        _hint = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = F(11),
+            alignment = TextAnchor.MiddleCenter
+        };
+        _hint.normal.textColor = new Color(0.45f, 0.49f, 0.57f);
     }
 
     Rect R(float x, float y, float w, float h)
@@ -145,247 +148,84 @@ public class StartMenu : MonoBehaviour
         return new Rect(_ox + x * _scale, _oy + y * _scale, w * _scale, h * _scale);
     }
 
-    Rect C(Rect parent, float x, float y, float w, float h)
+    void DrawRow(string label, float y, string[] items, int selected,
+        float chipWidth, float gap, Action<int> onSelect)
     {
-        return new Rect(parent.x + x * _scale, parent.y + y * _scale, w * _scale, h * _scale);
-    }
+        GUI.Label(R((VirtualW - 600f) * 0.5f, y, 600f, 20f), label, _section);
 
-    void DrawHeader(float t)
-    {
-        float pulse = MenuVisuals.Pulse(t, 1.6f);
-        MenuVisuals.DrawGlow(R(390f, 4f, 500f, 118f), new Color(1f, 0.62f, 0.2f), 0.18f + pulse * 0.1f);
+        float total = items.Length * chipWidth + (items.Length - 1) * gap;
+        float x = (VirtualW - total) * 0.5f;
 
-        GUI.Label(R(190f, 14f, 900f, 58f), "20 ХВИЛИН ДО СВІТАНКУ", _title);
-        GUI.Label(R(240f, 72f, 800f, 26f), "Оберни героя, зброю та місце. Світанок настане через 20 хвилин.", _subtitle);
-
-        Color line = new Color(Gold.r, Gold.g, Gold.b, 0.45f);
-        MenuVisuals.DrawLine(R(250f, 112f, 300f, 1f), line);
-        MenuVisuals.DrawLine(R(730f, 112f, 300f, 1f), line);
-        MenuVisuals.DrawGlow(R(632f, 102f, 16f, 20f), Gold, 0.75f + pulse * 0.2f);
-    }
-
-    void DrawLocationPanel(Rect panel)
-    {
-        Color accent = new Color(0.4f, 0.8f, 0.55f);
-        MenuVisuals.DrawPanel(panel, accent);
-        Section(panel, "ЛОКАЦІЯ", accent);
-
-        string[] names = { "Ліс", "Храм", "Гарбузове поле" };
-        string[] descriptions =
+        for (int i = 0; i < items.Length; i++)
         {
-            "Туманний ліс. Рідкі дерева, камені й тиша між рядами.",
-            "Давній храм. Колони, вівтарі й жовте світло руїн.",
-            "Гарбузове поле. Могили, сухі дерева й помаранчевий туман."
-        };
-        Color[] colors =
-        {
-            new Color(0.35f, 0.85f, 0.45f),
-            new Color(1f, 0.78f, 0.28f),
-            new Color(1f, 0.45f, 0.16f)
-        };
+            Rect b = R(x + i * (chipWidth + gap), y + 26f, chipWidth, 40f);
+            bool isSelected = i == selected;
 
-        for (int i = 0; i < names.Length; i++)
-        {
-            var map = (MapType)i;
-            bool selected = GameSession.SelectedMap == map;
-            Rect b = C(panel, 18f, 48f + i * 56f, 294f, 48f);
-
-            if (MenuVisuals.DrawButton(b, selected, colors[i]))
+            if (MenuVisuals.DrawMinimalButton(b, isSelected, Gold))
             {
                 Click();
-                GameSession.SelectedMap = map;
-                ArenaBuilder.Build(ArenaBuilder.Size, map);
+                onSelect(i);
             }
 
-            MenuVisuals.DrawGlow(C(b, 10f, 8f, 32f, 32f), colors[i], selected ? 0.8f : 0.45f);
-            GUI.Label(C(b, 52f, 6f, 232f, 36f), names[i], _rowName);
+            GUI.Label(b, items[i], isSelected ? _chipSelected : _chip);
         }
-
-        GUI.Label(C(panel, 20f, 218f, 290f, 44f), descriptions[(int)GameSession.SelectedMap], _small);
-        MenuVisuals.DrawLine(C(panel, 18f, 270f, 294f, 1f), new Color(1f, 1f, 1f, 0.1f));
-
-        Section(panel, "ТЕМРЯВА", Ice, 278f);
-
-        for (int i = 0; i <= 3; i++)
-        {
-            int col = i % 2;
-            int row = i / 2;
-            bool selected = GameSession.SelectedDarkness == i;
-            Rect b = C(panel, 18f + col * 151f, 312f + row * 42f, 143f, 34f);
-            string label = i == 0 ? "Звичайна" : "Рівень " + i;
-
-            if (MenuVisuals.DrawButton(b, selected, Ice))
-            {
-                Click();
-                GameSession.SelectedDarkness = i;
-                PrototypeSettings.Set(PrototypeSettings.Darkness, i);
-                PrototypeSettings.Save();
-            }
-
-            GUI.Label(C(b, 10f, 0f, 123f, 34f), label, _small);
-        }
-
-        GUI.Label(C(panel, 20f, 396f, 290f, 20f), "Більше темряви — більше ворогів і XP", _small);
     }
 
-    void DrawHeroPanel(Rect panel)
+    static string[] LocationNames()
     {
-        Color accent = new Color(0.75f, 0.5f, 1f);
-        MenuVisuals.DrawPanel(panel, accent);
-        Section(panel, "ГЕРОЙ", accent);
+        return new[] { "Ліс", "Храм", "Гарбузове поле" };
+    }
 
+    static string[] HeroNames()
+    {
         var all = CharacterCatalog.All;
-        float cardW = 82f;
-        float gap = 8f;
-        float startX = 17f;
-
+        var names = new string[all.Length];
         for (int i = 0; i < all.Length; i++)
-        {
-            var hero = all[i];
-            bool selected = GameSession.SelectedCharacter == hero.Id;
-            Rect b = C(panel, startX + i * (cardW + gap), 48f, cardW, 94f);
-
-            if (MenuVisuals.DrawButton(b, selected, hero.Color))
-            {
-                Click();
-                GameSession.SelectedCharacter = hero.Id;
-            }
-
-            MenuVisuals.DrawGlow(C(b, 24f, 8f, 34f, 34f), hero.Color, selected ? 0.9f : 0.5f);
-            GUI.Label(C(b, 24f, 8f, 34f, 34f), hero.Name.Substring(0, 1), _cardLetter);
-            GUI.Label(C(b, 5f, 46f, cardW - 10f, 36f), hero.Name, _cardName);
-        }
-
-        var current = CharacterCatalog.Get(GameSession.SelectedCharacter);
-
-        GUI.Label(C(panel, 18f, 152f, 440f, 20f), "ПАСИВКА:", _small);
-        GUI.Label(C(panel, 18f, 172f, 440f, 60f), current.Description, _text);
-        MenuVisuals.DrawLine(C(panel, 18f, 234f, 440f, 1f), new Color(1f, 1f, 1f, 0.1f));
-
-        GUI.Label(C(panel, 18f, 242f, 440f, 24f), "ЗДІБНІСТЬ (ПКМ): " + current.SpecialName, _section);
-        GUI.Label(C(panel, 18f, 268f, 440f, 48f), current.SpecialDescription, _text);
-
-        MenuVisuals.DrawLine(C(panel, 18f, 318f, 440f, 8f), new Color(0.06f, 0.07f, 0.12f, 0.9f));
-        MenuVisuals.DrawLine(C(panel, 18f, 318f, 440f * Mathf.Clamp01(current.MaxHp / 7f), 8f), current.Color);
-
-        GUI.Label(C(panel, 18f, 332f, 200f, 22f), "HP: " + current.MaxHp.ToString("0"), _small);
-        GUI.Label(C(panel, 240f, 332f, 218f, 22f), "Стиль: " + HeroStyle(current.Id), _small);
-
-        GUI.Label(C(panel, 18f, 360f, 440f, 46f),
-            "Порада: вивчай картки дзеркала й часового зсуву — вони відкривають нові можливості.", _small);
+            names[i] = all[i].Name;
+        return names;
     }
 
-    void DrawWeaponPanel(Rect panel)
+    static string[] WeaponNames()
     {
-        Color accent = new Color(1f, 0.68f, 0.24f);
-        MenuVisuals.DrawPanel(panel, accent);
-        Section(panel, "СТАРТОВА ЗБРОЯ", accent);
-
-        GUI.Label(C(panel, 18f, 40f, 294f, 22f), "Усі отримані зброї стріляють разом", _small);
-
         var all = WeaponCatalog.All;
-        float cardW = 140f;
-        float cardH = 38f;
-
+        var names = new string[all.Length];
         for (int i = 0; i < all.Length; i++)
-        {
-            int col = i % 2;
-            int row = i / 2;
-            bool selected = GameSession.SelectedWeapon == all[i].Id;
-            Color c = WeaponColor(i);
-            Rect b = C(panel, 18f + col * 148f, 72f + row * 46f, cardW, cardH);
-
-            if (MenuVisuals.DrawButton(b, selected, c))
-            {
-                Click();
-                GameSession.SelectedWeapon = all[i].Id;
-            }
-
-            MenuVisuals.DrawGlow(C(b, 8f, 10f, 18f, 18f), c, selected ? 0.85f : 0.42f);
-            GUI.Label(C(b, 32f, 0f, cardW - 38f, cardH), all[i].Title, _small);
-        }
-
-        int index = IndexOfWeapon(GameSession.SelectedWeapon);
-        GUI.Label(C(panel, 18f, 354f, 294f, 20f), all[index].Title.ToUpper(), _section);
-        GUI.Label(C(panel, 18f, 376f, 294f, 38f), all[index].BaseDescription, _small);
+            names[i] = all[i].Title;
+        return names;
     }
 
-    void DrawFooter(GameSession session, float t)
+    static string[] DarknessNames()
     {
-        Rect panel = R(54f, 576f, 1172f, 124f);
-        MenuVisuals.DrawPanel(panel, Gold);
+        var names = new string[4];
+        for (int i = 0; i < names.Length; i++)
+            names[i] = i == 0 ? "Звичайна" : "Рівень " + i;
+        return names;
+    }
 
-        string summary = session.MapName + "  ·  " + session.CharacterName + "  ·  " + session.WeaponName;
-        GUI.Label(C(panel, 20f, 14f, 330f, 26f), "ОБРАНИЙ ВИБІР", _section);
-        GUI.Label(C(panel, 20f, 40f, 330f, 22f), summary, _small);
-
-        Rect start = C(panel, 386f, 10f, 400f, 58f);
-        MenuVisuals.DrawGlow(start, Gold, 0.16f + MenuVisuals.Pulse(t, 2.2f) * 0.16f);
-        if (MenuVisuals.DrawButton(start, true, Gold))
+    static int HeroIndex()
+    {
+        var all = CharacterCatalog.All;
+        for (int i = 0; i < all.Length; i++)
         {
-            Click();
-            session.BeginRun();
+            if (all[i].Id == GameSession.SelectedCharacter)
+                return i;
         }
-        GUI.Label(start, "ПОЧАТИ ГРУ", _start);
+        return 0;
+    }
 
-        GUI.Label(C(panel, 20f, 80f, 1132f, 18f),
-            "WASD — рух   ·   ЛКМ — стрілянина   ·   ПКМ — здатність   ·   1–4 — підсилення   ·   R — перемішування карток", _hint);
-        GUI.Label(C(panel, 20f, 100f, 1132f, 18f),
-            "Скіли вивчаються картками: Q — дзеркало заднього виду   ·   E — часовий зсув", _hint);
-
-        GUI.Label(C(panel, 830f, 14f, 320f, 26f), "00:00  →  20:00", _section);
-        GUI.Label(C(panel, 830f, 40f, 320f, 22f), "Витримай до світанку", _small);
+    static int WeaponIndex()
+    {
+        var all = WeaponCatalog.All;
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i].Id == GameSession.SelectedWeapon)
+                return i;
+        }
+        return 0;
     }
 
     static void Click()
     {
-        AudioManager.Instance?.Play("ui_click", 0.55f, Random.Range(0.96f, 1.06f), 0.04f);
-    }
-
-    void Section(Rect panel, string text, Color accent, float y = 12f)
-    {
-        GUI.Label(C(panel, 18f, y, 260f, 24f), text, _section);
-        MenuVisuals.DrawLine(C(panel, 18f, y + 25f, 34f, 2f), accent);
-    }
-
-    static string HeroStyle(CharacterId id)
-    {
-        switch (id)
-        {
-            case CharacterId.Diamond: return "Танк";
-            case CharacterId.Scarlett: return "Полум'я";
-            case CharacterId.Spark: return "Блискавка";
-            case CharacterId.Lilith: return "Призив";
-            default: return "Швидкість";
-        }
-    }
-
-    static Color WeaponColor(int index)
-    {
-        Color[] palette =
-        {
-            new Color(1f, 0.82f, 0.4f),
-            new Color(1f, 0.5f, 0.25f),
-            new Color(0.5f, 0.9f, 0.5f),
-            new Color(0.5f, 0.75f, 1f),
-            new Color(0.85f, 0.4f, 1f),
-            new Color(1f, 0.4f, 0.15f),
-            new Color(0.6f, 1f, 0.4f),
-            new Color(0.4f, 0.85f, 1f),
-            new Color(0.8f, 0.9f, 1f),
-            new Color(0.4f, 1f, 0.6f),
-            new Color(0.6f, 0.75f, 1f)
-        };
-        return palette[index % palette.Length];
-    }
-
-    static int IndexOfWeapon(WeaponId id)
-    {
-        for (int i = 0; i < WeaponCatalog.All.Length; i++)
-        {
-            if (WeaponCatalog.All[i].Id == id)
-                return i;
-        }
-        return 0;
+        AudioManager.Instance?.Play("ui_click", 0.55f, UnityEngine.Random.Range(0.96f, 1.06f), 0.04f);
     }
 }

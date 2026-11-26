@@ -70,6 +70,11 @@ public class Enemy : MonoBehaviour
     float _chargeTimer;
     Vector3 _chargeDir;
     bool _charging;
+    // Локальний обхід перешкод: бік і таймер, щоб моб не смикався щокадру.
+    float _avoidSide;
+    float _avoidTimer;
+    Vector3 _lastMovePos;
+    float _stuckTimer;
     bool _dead;
     bool _grounded = true;
     EnemyRagdoll _ragdoll;
@@ -236,16 +241,18 @@ public class Enemy : MonoBehaviour
         // імпортовані моделі з анімаціями. Процедурні меші — лише fallback.
         var visual = CharacterVisualCatalog.CreateEnemy(_visual, _profile.Kind, Tier,
             _profile.ModelHeight, _profile.Color, _profile.SkeletonVisual);
-        if (visual != null)
-            _animations = visual.Animations;
 
-        if (_animations == null)
+        if (visual == null)
         {
+            // Префаба немає — процедурна модель лишається єдиним варіантом.
             _rig = EnemyModelBuilder.Build(_visual, _profile.Kind, Tier,
                 _profile.ModelHeight, _profile.Radius, _profile.Color, _profile.Emission);
         }
         else
         {
+            // Готова модель уже є навіть коли анімацій немає (Dragon/Bat/Butterfly).
+            // Дублювати її процедурною моделлю не можна — це давало зайве світіння.
+            _animations = visual.Animations;
             _spawnAnimTimer = 0.6f;
         }
 
@@ -303,6 +310,13 @@ public class Enemy : MonoBehaviour
         float dist = to.magnitude;
         Vector3 dir = dist > 0.01f ? to / dist : Vector3.forward;
 
+        // Наземні моби обходять колони, стіни й камені; стрілянина йде прямо
+        // по гравцю, тому напрямок прицілу (dir) лишається незмінним.
+        Vector3 moveDir = dir;
+        if (!_profile.Flying)
+            moveDir = ObstacleRegistry.Steer(dir, transform.position, _profile.Radius * _profile.Scale,
+                ref _avoidSide, ref _avoidTimer, dt);
+
         if (dist > 0.3f)
             _visual.rotation = Quaternion.Slerp(_visual.rotation, Quaternion.LookRotation(dir, Vector3.up), dt * 8f);
 
@@ -319,13 +333,13 @@ public class Enemy : MonoBehaviour
         {
             case EnemyBehavior.Ranged:
                 if (dist > 7f)
-                    Move(dir, speed, dt);
+                    Move(moveDir, speed, dt);
                 else if (dist < 4.5f)
-                    Move(-dir, speed * 0.6f, dt);
+                    Move(-moveDir, speed * 0.6f, dt);
                 ShootAtPlayer(dir, dt);
                 break;
             case EnemyBehavior.Exploder:
-                Move(dir, speed, dt);
+                Move(moveDir, speed, dt);
                 if (dist < _profile.Radius + 1.25f)
                     Detonate(player);
                 break;
@@ -336,24 +350,35 @@ public class Enemy : MonoBehaviour
                 MoveFlying(dir, speed, dt);
                 break;
             case EnemyBehavior.BossHastur:
-                UpdateBoss(dir, dist, dt, 12, ProjectileStyle.Orb, ProjectileBehavior.EnemyOrb);
+                UpdateBoss(dir, moveDir, dist, dt, 12, ProjectileStyle.Orb, ProjectileBehavior.EnemyOrb);
                 break;
             case EnemyBehavior.BossShoggoth:
-                UpdateBoss(dir, dist, dt, 8, ProjectileStyle.Flame, ProjectileBehavior.EnemyCurse);
+                UpdateBoss(dir, moveDir, dist, dt, 8, ProjectileStyle.Flame, ProjectileBehavior.EnemyCurse);
                 break;
             case EnemyBehavior.BossReaper:
-                UpdateBoss(dir, dist, dt, 6, ProjectileStyle.Knife, ProjectileBehavior.EnemyHoming);
+                UpdateBoss(dir, moveDir, dist, dt, 6, ProjectileStyle.Knife, ProjectileBehavior.EnemyHoming);
                 break;
             case EnemyBehavior.BossYog:
-                UpdateBoss(dir, dist, dt, 16, ProjectileStyle.Orb, ProjectileBehavior.EnemyOrb);
+                UpdateBoss(dir, moveDir, dist, dt, 16, ProjectileStyle.Orb, ProjectileBehavior.EnemyOrb);
                 break;
             case EnemyBehavior.BossShub:
-                UpdateBoss(dir, dist, dt, 10, ProjectileStyle.Spore, ProjectileBehavior.EnemyCurse);
+                UpdateBoss(dir, moveDir, dist, dt, 10, ProjectileStyle.Spore, ProjectileBehavior.EnemyCurse);
                 break;
             default:
-                Move(dir, speed, dt);
+                Move(moveDir, speed, dt);
                 break;
         }
+
+        // Якщо моб тривалий час майже не зрушив — міняємо бік обходу.
+        float stepDistance = Vector3.Distance(transform.position, _lastMovePos);
+        _stuckTimer = stepDistance < 0.02f ? _stuckTimer + dt : 0f;
+        if (_stuckTimer > 1.5f)
+        {
+            _avoidSide = -_avoidSide;
+            _avoidTimer = 1.2f;
+            _stuckTimer = 0f;
+        }
+        _lastMovePos = transform.position;
 
         _touchCooldown -= dt;
         if (_touchCooldown <= 0f && dist < _touchRadius)
@@ -486,7 +511,8 @@ public class Enemy : MonoBehaviour
         Projectile.SpawnBurst(transform.position + Vector3.up, new Color(0.5f, 1f, 0.4f), 8);
     }
 
-    void UpdateBoss(Vector3 dir, float dist, float dt, int burstCount, ProjectileStyle style, ProjectileBehavior behavior)
+    void UpdateBoss(Vector3 aimDir, Vector3 moveDir, float dist, float dt, int burstCount,
+        ProjectileStyle style, ProjectileBehavior behavior)
     {
         float hp = Health01;
         int newPhase = hp > 0.66f ? 0 : hp > 0.33f ? 1 : 2;
@@ -499,14 +525,14 @@ public class Enemy : MonoBehaviour
         }
 
         if (dist > 5f || _profile.Behavior == EnemyBehavior.BossShoggoth)
-            Move(dir, _speed * (_profile.Flying ? 1f : 1f), dt);
+            Move(moveDir, _speed * (_profile.Flying ? 1f : 1f), dt);
 
         if (_profile.Behavior == EnemyBehavior.BossShoggoth && _attackTimer <= 0f)
         {
             _attackTimer = 4.2f - _phase * 0.5f;
             _charging = true;
             _chargeTimer = 1.1f;
-            _chargeDir = dir;
+            _chargeDir = moveDir;
             SetTelegraph(1.1f);
         }
 
@@ -518,7 +544,7 @@ public class Enemy : MonoBehaviour
         if (_attackTimer <= 0f)
         {
             _attackTimer = Mathf.Max(1.4f, 3.2f - _phase * 0.55f);
-            FireBurst(dir, burstCount, style, behavior);
+            FireBurst(aimDir, burstCount, style, behavior);
         }
 
         if (_phaseTimer <= 0f)

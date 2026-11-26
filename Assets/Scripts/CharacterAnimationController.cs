@@ -16,7 +16,8 @@ public sealed class CharacterAnimationController : MonoBehaviour
     static string _loadedFolder;
     static readonly string[] AliasNames =
     {
-        "Spawn", "Idle", "Walk", "Run", "Attack", "Hit", "Death", "Reload", "Shoot", "Magic"
+        "Spawn", "Idle", "Walk", "Run", "Attack", "Hit", "Death", "Reload", "Shoot", "Magic",
+        "RollForward", "RollBackward", "RollLeft", "RollRight"
     };
 
     Animation _animation;
@@ -71,6 +72,12 @@ public sealed class CharacterAnimationController : MonoBehaviour
             controller.Map("Hit", "Hit_A", false);
             controller.Map("Death", "Death_A", false);
             controller.Map("Reload", "Ranged_1H_Reload", false);
+
+            // CC0 KayKit MovementAdvanced: чотири напрямки перекату.
+            controller.Map("RollForward", "Dodge_Forward", false);
+            controller.Map("RollBackward", "Dodge_Backward", false);
+            controller.Map("RollLeft", "Dodge_Left", false);
+            controller.Map("RollRight", "Dodge_Right", false);
 
             if (profile == "ranged")
                 controller.Map("Attack", "Ranged_1H_Shoot", false);
@@ -144,28 +151,53 @@ public sealed class CharacterAnimationController : MonoBehaviour
     /// </summary>
     public void SetState(string state, float fade = 0.16f)
     {
+        SetState(state, fade, 1f);
+    }
+
+    public void SetState(string state, float fade, float speed)
+    {
         if (_animation == null || string.IsNullOrEmpty(state) || state == _current)
             return;
 
-        string alias;
-        if (!_aliases.TryGetValue(state, out alias))
-        {
-            for (int i = 0; i < AliasNames.Length; i++)
-            {
-                if (string.Equals(AliasNames[i], state, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    alias = AliasNames[i];
-                    break;
-                }
-            }
-        }
-        if (string.IsNullOrEmpty(alias) || !_aliases.ContainsKey(alias))
+        string alias = ResolveAlias(state);
+        if (string.IsNullOrEmpty(alias))
             return;
 
         _current = alias;
+        var clipState = _animation[alias];
+        if (clipState != null)
+            clipState.speed = Mathf.Max(0.01f, speed);
+
         if (fade <= 0f)
             _animation.Play(alias, PlayMode.StopSameLayer);
         else
             _animation.CrossFade(alias, fade);
+    }
+
+    /// <summary>Тривалість кліпу в секундах — використовується для синхронізації перекату.</summary>
+    public float ClipLength(string state)
+    {
+        string alias = ResolveAlias(state);
+        if (string.IsNullOrEmpty(alias) || _animation == null)
+            return 0f;
+        var clip = _animation.GetClip(alias);
+        return clip != null ? clip.length : 0f;
+    }
+
+    string ResolveAlias(string state)
+    {
+        string alias;
+        if (_aliases.TryGetValue(state, out alias))
+            return alias;
+
+        for (int i = 0; i < AliasNames.Length; i++)
+        {
+            if (string.Equals(AliasNames[i], state, System.StringComparison.OrdinalIgnoreCase))
+            {
+                alias = AliasNames[i];
+                return _aliases.ContainsKey(alias) ? alias : null;
+            }
+        }
+        return null;
     }
 }

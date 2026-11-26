@@ -332,7 +332,8 @@ public class GameHud : MonoBehaviour
         float x = Screen.width - w - 18f;
         float y = Screen.height - 52f;
 
-        GUI.Label(new Rect(x, y - 22f, w, 20f), "ПКМ — здатність", _small);
+        string skill = CharacterCatalog.Get(GameSession.SelectedCharacter).SpecialName;
+        GUI.Label(new Rect(x, y - 22f, w, 20f), "ПКМ — " + skill, _small);
         GUI.color = new Color(0f, 0f, 0f, 0.55f);
         GUI.DrawTexture(new Rect(x, y, w, 14f), Texture2D.whiteTexture);
         GUI.color = combat.SpecialRemaining <= 0f ? new Color(0.45f, 0.95f, 0.6f) : new Color(0.5f, 0.65f, 0.95f);

@@ -10,14 +10,16 @@ public class PlayerAvatarController : MonoBehaviour
     // Окремий шар: basic-камера виключає його з cullingMask, дзеркало — включає.
     public const int AvatarLayer = 31;
 
+    // KayKit-скелет сумісний із CC0 Dodge-кліпами, тому він стає повнотілим
+    // аватаром. Скелетні руки viewmodel лишаються FabSkeleton.
     static readonly string[] ModelCandidates =
     {
+        "Characters/Skeleton_Rogue",
+        "Characters/Skeleton_Warrior",
+        "Characters/Skeleton_Minion",
         "Characters/FabSkeleton/SKEL",
         "Characters/FabSkeleton/Skeleton",
-        "Characters/FabSkeleton/Skeleton_Model",
-        "Characters/Skeleton_Warrior",
-        "Characters/Skeleton_Rogue",
-        "Characters/Skeleton_Minion"
+        "Characters/FabSkeleton/Skeleton_Model"
     };
 
     CharacterAnimationController _animations;
@@ -26,6 +28,7 @@ public class PlayerAvatarController : MonoBehaviour
     CharacterController _controller;
     float _hitUntil;
     bool _dead;
+    bool _rolling;
 
     public GameObject Model { get; private set; }
 
@@ -46,8 +49,13 @@ public class PlayerAvatarController : MonoBehaviour
         avatar._controller = player.GetComponent<CharacterController>();
 
         GameObject prefab = null;
+        int modelIndex = -1;
         for (int i = 0; i < ModelCandidates.Length && prefab == null; i++)
+        {
             prefab = Resources.Load<GameObject>(ModelCandidates[i]);
+            if (prefab != null)
+                modelIndex = i;
+        }
 
         if (prefab != null)
         {
@@ -89,8 +97,9 @@ public class PlayerAvatarController : MonoBehaviour
 
             SetLayer(root.transform, AvatarLayer);
             avatar.Model = model;
-            avatar._animations = CharacterAnimationController.Attach(model, "fab");
-            Debug.Log("[Avatar] full-body model attached: " + prefab.name);
+            bool fabRig = modelIndex >= 3;
+            avatar._animations = CharacterAnimationController.Attach(model, fabRig ? "fab" : "rogue");
+            Debug.Log("[Avatar] full-body model attached: " + prefab.name + (fabRig ? " (Fab rig)" : " (KayKit rig)"));
         }
         else
         {
@@ -139,6 +148,25 @@ public class PlayerAvatarController : MonoBehaviour
         if (_animations == null)
             return;
 
+        var fps = _controller != null ? _controller.GetComponent<FirstPersonController>() : null;
+        if (fps != null && fps.IsRolling)
+        {
+            if (!_rolling)
+            {
+                string rollState = RollState(fps.RollDirection, _controller != null ? _controller.transform : null);
+                float length = _animations.ClipLength(rollState);
+                _animations.SetState(rollState, 0.04f, length > 0f ? length / 0.48f : 1f);
+                _rolling = true;
+            }
+            return;
+        }
+
+        if (_rolling)
+        {
+            _rolling = false;
+            _animations.SetState("Idle", 0.12f);
+        }
+
         float speed = _controller != null
             ? new Vector2(_controller.velocity.x, _controller.velocity.z).magnitude
             : 0f;
@@ -153,6 +181,14 @@ public class PlayerAvatarController : MonoBehaviour
             _animations.SetState("Walk");
         else
             _animations.SetState("Idle");
+    }
+
+    static string RollState(Vector3 worldDirection, Transform player)
+    {
+        Vector3 local = player != null ? player.InverseTransformDirection(worldDirection) : worldDirection;
+        if (Mathf.Abs(local.x) > Mathf.Abs(local.z))
+            return local.x >= 0f ? "RollRight" : "RollLeft";
+        return local.z >= 0f ? "RollForward" : "RollBackward";
     }
 
     static void SetLayer(Transform root, int layer)

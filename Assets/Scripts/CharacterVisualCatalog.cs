@@ -23,6 +23,7 @@ public static class CharacterVisualCatalog
     }
 
     static readonly Dictionary<string, Material> _materials = new Dictionary<string, Material>();
+    static readonly Dictionary<Material, Material> _dimmedMaterials = new Dictionary<Material, Material>();
     static Texture2D _skeletonTexture;
     static bool _textureChecked;
 
@@ -232,6 +233,12 @@ public static class CharacterVisualCatalog
             for (int i = 0; i < renderers.Length; i++)
                 renderers[i].sharedMaterial = material;
         }
+        else
+        {
+            // Тварини зберігають власні текстури, але не повинні світитися
+            // яскравіше за ландшафт поза променем ліхтаря.
+            DimKeptMaterials(renderers);
+        }
         for (int i = 0; i < renderers.Length; i++)
         {
             renderers[i].shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
@@ -298,8 +305,44 @@ public static class CharacterVisualCatalog
         if (_materials.TryGetValue(key, out material) && material != null)
             return material;
 
-        material = GameMaterials.Create(tint, tint * 0.28f, _skeletonTexture, Vector2.one, null, 0.3f, 0.08f);
+        material = GameMaterials.Create(tint, tint * 0.015f, _skeletonTexture, Vector2.one, null, 0.3f, 0.08f);
         _materials[key] = material;
         return material;
+    }
+
+    static void DimKeptMaterials(Renderer[] renderers)
+    {
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Material source = renderers[i].sharedMaterial;
+            if (source == null)
+                continue;
+
+            Material dim;
+            if (!_dimmedMaterials.TryGetValue(source, out dim))
+            {
+                dim = new Material(source) { name = source.name + "_Dim" };
+                if (dim.HasProperty("_Color"))
+                {
+                    Color c = dim.GetColor("_Color");
+                    c.r *= 0.45f; c.g *= 0.45f; c.b *= 0.45f;
+                    dim.SetColor("_Color", c);
+                }
+                if (dim.HasProperty("_BaseColor"))
+                {
+                    Color c = dim.GetColor("_BaseColor");
+                    c.r *= 0.45f; c.g *= 0.45f; c.b *= 0.45f;
+                    dim.SetColor("_BaseColor", c);
+                }
+                if (dim.HasProperty("_EmissionColor"))
+                {
+                    dim.SetColor("_EmissionColor", Color.black);
+                    dim.DisableKeyword("_EMISSION");
+                }
+                dim.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                _dimmedMaterials[source] = dim;
+            }
+            renderers[i].sharedMaterial = dim;
+        }
     }
 }

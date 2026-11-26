@@ -35,6 +35,7 @@ public class WeaponViewModel : MonoBehaviour
     Transform _secondMuzzleFlash;
     Transform _animatedPart;
     Transform _spinPart;
+    Transform _spinBladePivot;
     Transform _handsRoot;
     Transform _rightHand;
     Transform _leftHand;
@@ -216,6 +217,7 @@ public class WeaponViewModel : MonoBehaviour
         _currentId = weapon.Definition.Id;
         _currentLevel = weapon.Level;
         _spinPart = null;
+        _spinBladePivot = null;
         _animatedPart = null;
         _muzzleAnchor = null;
         _muzzleFlash = null;
@@ -264,8 +266,16 @@ public class WeaponViewModel : MonoBehaviour
             _secondMuzzleAnchor = imported.SecondMuzzle;
             // Kryven Blade зберігає власні руни, але циклонічне кільце лишається
             // окремим ефектом і працює однаково для будь-якої моделі меча.
+            // Півот не є батьком рук, тому обертання не зачіпає кисті.
             if (_currentId == WeaponId.CycloneSword)
+            {
+                _spinBladePivot = new GameObject("BladePivot").transform;
+                _spinBladePivot.SetParent(imported.Root, false);
+                Transform swordModel = imported.Root.Find("Model_Right");
+                if (swordModel != null)
+                    swordModel.SetParent(_spinBladePivot, true);
                 BuildBladeRing();
+            }
         }
         else
         {
@@ -343,6 +353,8 @@ public class WeaponViewModel : MonoBehaviour
         float reloadArc = _reloadProgress > 0f
             ? Mathf.Sin(Mathf.Clamp01(_reloadProgress) * Mathf.PI)
             : 0f;
+        // Обертання циклон-меча належить тільки леза/кільцю: кисті й передпліччя
+        // лишаються на місці, бо не є дітьми цього півота.
         bool spinWeapon = _combat.ActiveWeapon != null && _combat.ActiveWeapon.Definition.Behavior == WeaponBehavior.Spin;
         float spinTwist = spinWeapon ? _reloadProgress * 300f : 0f;
         float castArc = Mathf.Sin(Mathf.Clamp01(_cast) * Mathf.PI);
@@ -360,7 +372,7 @@ public class WeaponViewModel : MonoBehaviour
 
         Quaternion rot = _baseRot * Quaternion.Euler(
             -_kick * 18f + _reload * 18f + reloadArc * 26f + _equip * 44f - castArc * 16f,
-            _kick * 6f + _swayX * 60f + Mathf.Sin(_walkPhase) * _walk * 1.6f + spinTwist + castArc * 10f + swingArc * 52f,
+            _kick * 6f + _swayX * 60f + Mathf.Sin(_walkPhase) * _walk * 1.6f + castArc * 10f + swingArc * 52f,
             _reload * 10f + reloadArc * 22f + _equip * 18f + Mathf.Sin(_walkPhase) * _walk * 2.4f - castArc * 12f + swingArc * 38f);
 
         _modelRoot.localPosition = pos;
@@ -453,8 +465,11 @@ public class WeaponViewModel : MonoBehaviour
 
         AnimateHands(reloadArc, castArc);
 
+        if (_spinBladePivot != null)
+            _spinBladePivot.localRotation = Quaternion.Euler(0f, spinTwist, 0f);
+
         if (_spinPart != null && dt > 0f)
-            _spinPart.Rotate(0f, 0f, (460f + _swing * 1080f) * dt, Space.Self);
+            _spinPart.Rotate(0f, 0f, (460f + _swing * 1080f + reloadArc * 820f) * dt, Space.Self);
 
         // Ножі вилітають вперед на кожному кидку й повертаються на місце.
         for (int i = 0; i < _flyKnives.Count && i < _flyKnifeRest.Count; i++)
@@ -1014,10 +1029,14 @@ public class WeaponViewModel : MonoBehaviour
 
         Part(PrimitiveType.Cube, "Guard", new Vector3(0f, -0.02f, 0.05f), new Vector3(0.22f, 0.032f, 0.05f),
             gold, gold * 0.4f, Quaternion.identity, null, WeaponSurface.Gold);
+
+        _spinBladePivot = new GameObject("BladePivot").transform;
+        _spinBladePivot.SetParent(_modelRoot, false);
+
         Blade("Blade", new Vector3(0f, 0f, 0.29f), 0.46f, 0.078f, 0.022f,
-            steel, WeaponSurface.Metal, null, steel * 0.2f);
+            steel, WeaponSurface.Metal, _spinBladePivot, steel * 0.2f);
         Part(PrimitiveType.Cube, "Edge", new Vector3(0f, 0.015f, 0.29f), new Vector3(0.012f, 0.006f, 0.40f),
-            glow, glow * 1.2f, Quaternion.identity, null, WeaponSurface.Glow);
+            glow, glow * 1.2f, Quaternion.identity, _spinBladePivot, WeaponSurface.Glow);
 
         BuildBladeRing();
     }
@@ -1026,7 +1045,7 @@ public class WeaponViewModel : MonoBehaviour
     {
         Color glow = new Color(0.42f, 1f, 0.58f);
         _spinPart = new GameObject("SpinRing").transform;
-        _spinPart.SetParent(_modelRoot, false);
+        _spinPart.SetParent(_spinBladePivot != null ? _spinBladePivot : _modelRoot, false);
         _spinPart.localPosition = new Vector3(0f, 0f, 0.30f);
         for (int i = 0; i < 8; i++)
         {

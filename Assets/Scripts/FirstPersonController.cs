@@ -31,8 +31,24 @@ public class FirstPersonController : MonoBehaviour
     public float MouseSensitivity { get; set; } = 2.2f;
     public bool InvertY { get; set; }
     public bool IsRolling { get { return _rollTimer > 0f; } }
+    public Vector3 RollDirection { get { return _rollDir; } }
     public float RollCooldown01 { get { return Mathf.Clamp01(_rollCooldown / 1.2f); } }
     public void Shake(float strength) { _shake = Mathf.Max(_shake, strength); _shakeTime = 0.28f; }
+
+    /// <summary>
+    /// Системні комбінації з Ctrl/Alt не повинні керувати грою. Чисту функцію
+    /// можна перевірити в аудиті, не імітуючи натискання клавіш.
+    /// </summary>
+    public static bool ShouldHandleEscape(bool escapeDown, bool controlHeld, bool altHeld)
+    {
+        return escapeDown && !controlHeld && !altHeld;
+    }
+
+    public static bool EscapeModifierHeld()
+    {
+        return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) ||
+               Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+    }
 
     public static FirstPersonController Spawn(Vector3 position)
     {
@@ -128,7 +144,7 @@ public class FirstPersonController : MonoBehaviour
         if (!playing)
             return;
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (Input.GetKeyDown(KeyCode.Escape) && !EscapeModifierHeld())
             SetCursorLocked(!_cursorLocked);
 
         if (Input.GetMouseButtonDown(0) && !_cursorLocked)

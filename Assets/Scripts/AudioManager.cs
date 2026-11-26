@@ -145,6 +145,8 @@ public sealed class AudioManager : MonoBehaviour
         // жодного з 11 фірмових звуків зброї.
         AddGroup("extra_ui", sfx, "extra_ui_");
         AddGroup("extra_magic", sfx, "extra_magic_");
+        // Власний звук здатності на ПКМ — окрема група з п'яти безкоштовних кліпів.
+        AddGroup("skill", sfx, "extra_magic_");
         AddGroup("extra_nature", sfx, "extra_nature_");
         AddGroup("extra_step", sfx, "extra_step_");
 

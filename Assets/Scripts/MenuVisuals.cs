@@ -11,6 +11,12 @@ public static class MenuVisuals
     static Texture2D _panel;
     static Texture2D _button;
     static Texture2D _glow;
+    static Texture2D _flatBackground;
+    static Texture2D _flatButton;
+    static Texture2D _flatButtonHover;
+    static Texture2D _flatButtonSelected;
+    static Texture2D _flatGoldLine;
+    static Texture2D _flatMutedLine;
 
     static GUIStyle _panelStyle;
     static GUIStyle _buttonStyle;
@@ -32,6 +38,14 @@ public static class MenuVisuals
         _panel = MakeRoundedTexture(64, 64, 12, new Color(0.055f, 0.065f, 0.105f, 0.94f), true);
         _button = MakeRoundedTexture(64, 32, 9, new Color(0.09f, 0.1f, 0.15f, 0.96f), false);
         _glow = MakeGlow();
+
+        // Фіксовані піксельні кольори — IMGUI не змінює їх через колірний простір.
+        _flatBackground = MakeFlatTexture(2, 2, new Color32(14, 16, 22, 255), "MenuFlatBackground");
+        _flatButton = MakeFlatTexture(2, 2, new Color32(17, 19, 26, 255), "MenuFlatButton");
+        _flatButtonHover = MakeFlatTexture(2, 2, new Color32(23, 26, 34, 255), "MenuFlatButtonHover");
+        _flatButtonSelected = MakeFlatTexture(2, 2, new Color32(38, 33, 23, 255), "MenuFlatButtonSelected");
+        _flatGoldLine = MakeFlatTexture(1, 1, new Color32(232, 186, 107, 255), "MenuGoldLine");
+        _flatMutedLine = MakeFlatTexture(1, 1, new Color32(51, 59, 74, 255), "MenuMutedLine");
 
         _panelStyle = new GUIStyle
         {
@@ -117,6 +131,30 @@ public static class MenuVisuals
 
         GUI.color = old;
         return clicked;
+    }
+
+    /// <summary>Плоский фон головного меню — без зірок, ореолів і віньєтки.</summary>
+    public static void DrawMinimalBackground()
+    {
+        Ensure();
+        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), _flatBackground,
+            ScaleMode.StretchToFill);
+    }
+
+    /// <summary>Плоска кнопка з однопіксельною рамкою. Використовуємо тільки в головному меню.</summary>
+    public static bool DrawMinimalButton(Rect rect, bool selected, Color accent)
+    {
+        Ensure();
+
+        bool hover = rect.Contains(Event.current.mousePosition);
+        Texture2D fill = selected ? _flatButtonSelected : hover ? _flatButtonHover : _flatButton;
+        GUI.DrawTexture(rect, fill, ScaleMode.StretchToFill);
+
+        Texture2D line = selected ? _flatGoldLine : _flatMutedLine;
+        GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 1f), line);
+        GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), line);
+
+        return GUI.Button(rect, GUIContent.none, GUIStyle.none);
     }
 
     public static void DrawGlow(Rect rect, Color color, float alpha)
@@ -293,6 +331,14 @@ public static class MenuVisuals
                     Mathf.Clamp01(old.a + color.a));
             }
         }
+    }
+
+    static Texture2D MakeFlatTexture(int w, int h, Color32 color, string name)
+    {
+        var pixels = new Color32[w * h];
+        for (int i = 0; i < pixels.Length; i++)
+            pixels[i] = color;
+        return MakeTexture(w, h, pixels, name);
     }
 
     static Texture2D MakeTexture(int w, int h, Color32[] pixels, string name)

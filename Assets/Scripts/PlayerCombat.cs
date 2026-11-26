@@ -169,13 +169,26 @@ public class PlayerCombat : MonoBehaviour
 
         CharacterId id = GameSession.SelectedCharacter;
         var character = CharacterCatalog.Get(id);
+        float radius = id == CharacterId.Spark ? 9f : 7f;
+        var enemies = Enemy.NearestEnemies(transform.position, 40, radius);
+
+        // Порожній клік не здається «мертвим» і не спалює довгу перезарядку.
+        if (enemies.Count == 0)
+        {
+            GameSession.Instance?.ShowNotice(
+                "ЗДІБНІСТЬ: " + character.SpecialName + " — немає цілей поруч", 1.4f);
+            AudioManager.Instance?.Play("ui_back", 0.5f, 1f, 0.15f);
+            _specialReadyAt = Time.time + 0.6f;
+            return;
+        }
+
         _specialReadyAt = Time.time + Mathf.Max(6f, _specialCooldown);
 
         float damage = 28f * DamageMultiplier;
-        var enemies = Enemy.NearestEnemies(transform.position, 40, id == CharacterId.Spark ? 9f : 7f);
-
+        var targets = new List<Vector3>(enemies.Count);
         for (int i = 0; i < enemies.Count; i++)
         {
+            targets.Add(enemies[i].transform.position + Vector3.up * 0.6f);
             enemies[i].TakeDamage(damage);
 
             switch (id)
@@ -209,6 +222,20 @@ public class PlayerCombat : MonoBehaviour
             _stats.Heal(1f);
         }
 
+        Color color;
+        float pitch;
+        switch (id)
+        {
+            case CharacterId.Diamond: color = new Color(0.45f, 0.82f, 1f); pitch = 1.12f; break;
+            case CharacterId.Scarlett: color = new Color(1f, 0.38f, 0.08f); pitch = 0.86f; break;
+            case CharacterId.Spark: color = new Color(0.35f, 0.95f, 1f); pitch = 1.25f; break;
+            case CharacterId.Lilith: color = new Color(0.85f, 0.35f, 1f); pitch = 1f; break;
+            default: color = new Color(0.78f, 0.35f, 1f); pitch = 0.92f; break;
+        }
+
+        SkillFx.Spawn(transform.position, color, radius,
+            id == CharacterId.Spark ? targets : null);
+        AudioManager.Instance?.Play("skill", 0.9f, pitch, 0f);
         GameSession.Instance?.ShowNotice("ЗДІБНІСТЬ: " + character.SpecialName, 1.8f);
         PlayerLamp.Instance?.Flash(3f);
     }

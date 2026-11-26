@@ -14,6 +14,7 @@ public class RearViewMirror : MonoBehaviour
 
     Camera _sourceCamera;
     Camera _camera;
+    Light _mirrorLamp;
     RenderTexture _texture;
     PlayerStats _stats;
     bool _visible = true;
@@ -64,13 +65,27 @@ public class RearViewMirror : MonoBehaviour
         _camera = cameraObject.AddComponent<Camera>();
         _camera.targetTexture = _texture;
         _camera.clearFlags = CameraClearFlags.Skybox;
-        _camera.cullingMask = ~0;
+        // Аватар гравця існує лише для тіней/дзеркала, але в самому дзеркалі
+        // персонаж не повинен відображатися.
+        _camera.cullingMask = ~(1 << PlayerAvatarController.AvatarLayer);
         _camera.nearClipPlane = 0.08f;
         _camera.farClipPlane = 2200f;
         _camera.fieldOfView = 82f;
         _camera.useOcclusionCulling = false;
         _camera.allowHDR = false;
         _camera.allowMSAA = false;
+
+        // Ліхтар дзеркала — окреме світло з параметрами основного ліхтаря.
+        var lampObject = new GameObject("RearViewLamp");
+        lampObject.transform.SetParent(cameraObject.transform, false);
+        lampObject.transform.localPosition = new Vector3(0f, 0.12f, 0f);
+        _mirrorLamp = lampObject.AddComponent<Light>();
+        _mirrorLamp.type = LightType.Spot;
+        _mirrorLamp.spotAngle = 52f;
+        _mirrorLamp.innerSpotAngle = 16f;
+        _mirrorLamp.color = new Color(1f, 0.94f, 0.84f);
+        _mirrorLamp.shadows = LightShadows.None;
+        _mirrorLamp.enabled = false;
 
         // Дзеркало не повинно додавати другий AudioListener.
         ApplyLevel();
@@ -79,20 +94,27 @@ public class RearViewMirror : MonoBehaviour
     void Update()
     {
         bool playing = GameSession.Instance == null || GameSession.Instance.AllowsGameplay;
-        if (!playing || _stats == null || !_stats.RearViewMirror)
+        bool unlocked = _devOverride || (_stats != null && _stats.RearViewMirror);
+        if (!playing || !unlocked)
         {
             if (_camera != null)
                 _camera.enabled = false;
+            if (_mirrorLamp != null)
+                _mirrorLamp.enabled = false;
             return;
         }
 
         if (Input.GetKeyDown(KeyCode.Q))
             _visible = !_visible;
 
+        bool active = _visible;
         if (_camera != null)
-            _camera.enabled = _visible;
+            _camera.enabled = active;
+        if (_mirrorLamp != null)
+            _mirrorLamp.enabled = active;
 
-        ApplyLevel();
+        if (active)
+            ApplyLevel();
     }
 
     void ApplyLevel()
@@ -111,6 +133,29 @@ public class RearViewMirror : MonoBehaviour
 
         _camera.transform.position = _sourceCamera.transform.position;
         _camera.transform.rotation = _sourceCamera.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
+        SyncLamp();
+    }
+
+    void SyncLamp()
+    {
+        if (_mirrorLamp == null || PlayerLamp.Instance == null)
+            return;
+
+        Light source = PlayerLamp.Instance.Light;
+        if (source == null)
+            return;
+
+        // Лампа дзеркала працює тільки тоді, коли саме дзеркало увімкнено.
+        bool active = IsActive && (GameSession.Instance == null || GameSession.Instance.AllowsGameplay);
+        _mirrorLamp.enabled = active;
+        if (!active)
+            return;
+
+        _mirrorLamp.intensity = source.intensity;
+        _mirrorLamp.range = source.range;
+        _mirrorLamp.color = source.color;
+        _mirrorLamp.spotAngle = source.spotAngle;
+        _mirrorLamp.innerSpotAngle = source.innerSpotAngle;
     }
 
     void OnDestroy()

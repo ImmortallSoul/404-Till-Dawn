@@ -33,9 +33,9 @@ public static class NightSky
             if (_skyMaterial.HasProperty("_MainTex"))
                 _skyMaterial.SetTexture("_MainTex", _texture);
             if (_skyMaterial.HasProperty("_Tint"))
-                _skyMaterial.SetColor("_Tint", new Color(0.85f, 0.9f, 1f));
+                _skyMaterial.SetColor("_Tint", new Color(0.52f, 0.6f, 0.78f));
             if (_skyMaterial.HasProperty("_Exposure"))
-                _skyMaterial.SetFloat("_Exposure", 1f);
+                _skyMaterial.SetFloat("_Exposure", 0.55f);
             if (_skyMaterial.HasProperty("_Mapping"))
                 _skyMaterial.SetFloat("_Mapping", 0f); // Latitude-Longitude
             if (_skyMaterial.HasProperty("_ImageType"))
@@ -56,15 +56,15 @@ public static class NightSky
         if (_skyMaterial != null)
         {
             if (_skyMaterial.HasProperty("_Exposure"))
-                _skyMaterial.SetFloat("_Exposure", Mathf.Lerp(1f, 1.12f, dawn));
+                _skyMaterial.SetFloat("_Exposure", Mathf.Lerp(0.55f, 0.78f, dawn));
             if (_skyMaterial.HasProperty("_Tint"))
-                _skyMaterial.SetColor("_Tint", Color.Lerp(new Color(0.85f, 0.9f, 1f),
-                    new Color(1f, 0.72f, 0.56f), dawn));
+                _skyMaterial.SetColor("_Tint", Color.Lerp(new Color(0.52f, 0.6f, 0.78f),
+                    new Color(0.86f, 0.62f, 0.5f), dawn));
         }
 
         if (_domeMaterial != null && _domeMaterial.HasProperty("_Color"))
-            _domeMaterial.SetColor("_Color", Color.Lerp(new Color(0.8f, 0.86f, 1f),
-                new Color(1f, 0.72f, 0.56f), dawn));
+            _domeMaterial.SetColor("_Color", Color.Lerp(new Color(0.5f, 0.58f, 0.78f),
+                new Color(0.9f, 0.66f, 0.52f), dawn));
     }
 
     static void BuildDome()
@@ -102,10 +102,10 @@ public static class NightSky
 
         var pixels = new Color[Width * Height];
 
-        Color zenith = new Color(0.012f, 0.018f, 0.055f);
-        Color horizon = new Color(0.045f, 0.06f, 0.13f);
-        Color groundHorizon = new Color(0.025f, 0.03f, 0.055f);
-        Color ground = new Color(0.008f, 0.01f, 0.02f);
+        Color zenith = new Color(0.004f, 0.007f, 0.022f);
+        Color horizon = new Color(0.016f, 0.024f, 0.052f);
+        Color groundHorizon = new Color(0.009f, 0.012f, 0.024f);
+        Color ground = new Color(0.003f, 0.004f, 0.009f);
 
         for (int y = 0; y < Height; y++)
         {
@@ -123,11 +123,11 @@ public static class NightSky
         var rng = new System.Random(20261122);
 
         // Розсіяні зорі, переважно у верхній півкулі.
-        for (int i = 0; i < 1500; i++)
+        for (int i = 0; i < 1200; i++)
         {
             int x = rng.Next(Width);
             int y = Height / 2 + 2 + rng.Next(Height / 2 - 4);
-            float brightness = 0.35f + (float)rng.NextDouble() * 0.65f;
+            float brightness = 0.22f + (float)rng.NextDouble() * 0.5f;
             float warmth = 0.85f + (float)rng.NextDouble() * 0.15f;
             var star = new Color(brightness, brightness * warmth, brightness * (0.9f + warmth * 0.1f));
 
@@ -157,12 +157,12 @@ public static class NightSky
                 if (d <= radius)
                 {
                     float core = 1f - d / radius;
-                    c = Color.Lerp(new Color(0.55f, 0.62f, 0.8f), Color.white, core);
+                    c = Color.Lerp(new Color(0.24f, 0.3f, 0.45f), new Color(0.72f, 0.78f, 0.95f), core);
                 }
                 else
                 {
                     float glow = 1f - (d - radius) / radius;
-                    c = new Color(0.16f, 0.2f, 0.34f) * glow;
+                    c = new Color(0.06f, 0.08f, 0.15f) * glow;
                 }
 
                 AddPixel(pixels, moonX + dx, moonY + dy, c);

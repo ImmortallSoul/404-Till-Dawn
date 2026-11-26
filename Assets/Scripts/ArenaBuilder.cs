@@ -5,6 +5,7 @@ public static class ArenaBuilder
 {
     public static float Size { get; private set; } = 56f;
     public static MapType CurrentMap { get; private set; } = MapType.Forest;
+    public static Transform ArenaRoot { get; private set; }
     public static float WalkLimit { get { return Size * 0.5f - 2f; } }
     public static float PropScale { get { return Mathf.Max(1f, WalkLimit / 126f); } }
 
@@ -66,6 +67,7 @@ public static class ArenaBuilder
             Object.Destroy(old);
 
         var root = new GameObject("Arena");
+        ArenaRoot = root.transform;
         float half = size * 0.5f;
         const float wallHeight = 9f;
         const float wallThickness = 1.6f;
@@ -143,6 +145,9 @@ public static class ArenaBuilder
             map == MapType.PumpkinPatch
                 ? new Color(0.42f, 0.22f, 0.48f)
                 : new Color(0.28f, 0.38f, 0.36f), WalkLimit);
+
+        // Локальна навігація мобів завжди працює з актуальною картою.
+        ObstacleRegistry.Rebuild();
     }
 
     static Material Textured(Texture2D color, Texture2D normal, Color tint, Vector2 tiling,
@@ -270,7 +275,7 @@ public static class ArenaBuilder
     static void BuildTemple(Transform root, Material stoneMat, Material pillarMat, Material goldMat,
         Material rockMat, Material bushMat)
     {
-        BuildTempleMaze(root, stoneMat, goldMat);
+        BuildTempleLayout(root, stoneMat, goldMat);
 
         var rng = new System.Random(4242);
 
@@ -323,88 +328,86 @@ public static class ArenaBuilder
         }
     }
 
-    static void BuildTempleMaze(Transform root, Material wallMat, Material goldMat)
+    /// <summary>
+    /// Храм без лабіринту: відкритий двір, 8 широких радіальних коридорів,
+    /// кільцева галерея й короткі руїнні стіни між коридорами. Усі проходи
+    /// ширші за моба, глухих кутів немає — вороги можуть іти прямо до гравця.
+    /// </summary>
+    static void BuildTempleLayout(Transform root, Material wallMat, Material goldMat)
     {
-        // Детермінований DFS-лабіринт. Кожна клітка сітки = прохід або стіна,
-        // розмір клітки 7 одиниць — проходи лишаються широкими для ворогів.
-        const int cells = 9;
-        const float step = 7f;
-        const float wallHeight = 5.2f;
-        int n = cells * 2 + 1;
-        bool[,] blocked = new bool[n, n];
-        for (int z = 0; z < n; z++)
-            for (int x = 0; x < n; x++)
-                blocked[z, x] = true;
-
-        var rng = new System.Random(9137);
-        var visited = new bool[cells, cells];
-        var stack = new Stack<Vector2Int>();
-        int cx = cells / 2;
-        int cy = cells / 2;
-        visited[cx, cy] = true;
-        blocked[cy * 2 + 1, cx * 2 + 1] = false;
-        stack.Push(new Vector2Int(cx, cy));
-
-        int[] dx = { 1, -1, 0, 0 };
-        int[] dz = { 0, 0, 1, -1 };
-        while (stack.Count > 0)
-        {
-            var current = stack.Peek();
-            var options = new List<int>();
-            for (int d = 0; d < 4; d++)
-            {
-                int nx = current.x + dx[d];
-                int nz = current.y + dz[d];
-                if (nx >= 0 && nx < cells && nz >= 0 && nz < cells && !visited[nx, nz])
-                    options.Add(d);
-            }
-            if (options.Count == 0)
-            {
-                stack.Pop();
-                continue;
-            }
-
-            int dir = options[rng.Next(options.Count)];
-            int nextX = current.x + dx[dir];
-            int nextZ = current.y + dz[dir];
-            blocked[current.y * 2 + 1 + dz[dir], current.x * 2 + 1 + dx[dir]] = false;
-            blocked[nextZ * 2 + 1, nextX * 2 + 1] = false;
-            visited[nextX, nextZ] = true;
-            stack.Push(new Vector2Int(nextX, nextZ));
-        }
-
-        // Центральна арена — відкрита, лабіринт оточує її.
-        for (int z = cy * 2 - 1; z <= cy * 2 + 3; z++)
-            for (int x = cx * 2 - 1; x <= cx * 2 + 3; x++)
-                if (x >= 0 && x < n && z >= 0 && z < n)
-                    blocked[z, x] = false;
-
-        // Кілька зовнішніх входів, щоб арена не була повністю закритою.
-        for (int i = 2; i < n - 2; i += 5)
-        {
-            blocked[0, i] = false;
-            blocked[n - 1, i] = false;
-            blocked[i, 0] = false;
-            blocked[i, n - 1] = false;
-        }
-
-        float origin = -(n - 1) * step * 0.5f;
+        const float wallHeight = 4.8f;
+        const float corridorHalfWidth = 6f;
+        const float lateral = corridorHalfWidth + 1.4f;
         int wallIndex = 0;
-        for (int z = 0; z < n; z++)
+
+        // Вісім променів. Стіни лише з боків, із проміжками по 8 м уздовж шляху.
+        float[] starts = { 28f, 46f, 64f };
+        float[] ends = { 38f, 56f, 74f };
+        for (int spoke = 0; spoke < 8; spoke++)
         {
-            for (int x = 0; x < n; x++)
+            float a = spoke * 45f * Mathf.Deg2Rad;
+            Vector3 axis = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            Vector3 side = new Vector3(-axis.z, 0f, axis.x);
+            Quaternion rotation = Quaternion.LookRotation(axis, Vector3.up);
+
+            for (int s = -1; s <= 1; s += 2)
             {
-                if (!blocked[z, x])
-                    continue;
+                for (int k = 0; k < starts.Length; k++)
+                {
+                    float middle = (starts[k] + ends[k]) * 0.5f;
+                    float length = ends[k] - starts[k];
+                    Vector3 center = axis * middle + side * (s * lateral);
+                    CreateRotatedBox(root, "TempleWall_" + wallIndex++,
+                        center + Vector3.up * (wallHeight * 0.5f),
+                        new Vector3(1.6f, wallHeight, length), rotation, wallMat);
 
-                Vector3 p = new Vector3(origin + x * step, wallHeight * 0.5f, origin + z * step);
-                CreateBox(root, "MazeWall_" + wallIndex++, p,
-                    new Vector3(step, wallHeight, step), wallMat);
-
-                if ((x + z) % 7 == 0)
-                    CreateBox(root, "MazeCap", p + Vector3.up * (wallHeight * 0.5f + 0.14f),
-                        new Vector3(step * 0.82f, 0.28f, step * 0.82f), goldMat);
+                    if ((spoke + k + (s > 0 ? 1 : 0)) % 3 == 0)
+                        CreateRotatedBox(root, "TempleCap",
+                            center + Vector3.up * (wallHeight + 0.16f),
+                            new Vector3(1.9f, 0.3f, length * 0.88f), rotation, goldMat);
+                }
             }
+        }
+
+        // Внутрішні руїни навколо двору: короткі дуги з проміжками ~10 м.
+        // Вони дають храму «тінь» для близького спавну, але не перекривають
+        // шлях до гравця — моб проходить між сегментами без патфайндингу.
+        const float innerRadius = 15.5f;
+        for (int i = 0; i < 6; i++)
+        {
+            float a = (i * 60f + 15f) * Mathf.Deg2Rad;
+            Vector3 center = new Vector3(Mathf.Cos(a) * innerRadius, 0f, Mathf.Sin(a) * innerRadius);
+            Vector3 tangent = new Vector3(-Mathf.Sin(a), 0f, Mathf.Cos(a));
+            CreateRotatedBox(root, "TempleWall_" + wallIndex++,
+                center + Vector3.up * (3.4f * 0.5f),
+                new Vector3(1.4f, 3.4f, 6f), Quaternion.LookRotation(tangent, Vector3.up), wallMat);
+        }
+
+        // Зовнішня галерея: короткі дуги з великими проміжками, моб завжди
+        // може перейти з одного коридору в інший, не потрапивши в пастку.
+        const float ringRadius = 78f;
+        for (int i = 0; i < 16; i++)
+        {
+            float a = (i * 22.5f + 11.25f) * Mathf.Deg2Rad;
+            Vector3 center = new Vector3(Mathf.Cos(a) * ringRadius, 0f, Mathf.Sin(a) * ringRadius);
+            Vector3 tangent = new Vector3(-Mathf.Sin(a), 0f, Mathf.Cos(a));
+            CreateRotatedBox(root, "TempleWall_" + wallIndex++,
+                center + Vector3.up * (wallHeight * 0.5f),
+                new Vector3(1.6f, wallHeight, 9f), Quaternion.LookRotation(tangent, Vector3.up), wallMat);
+        }
+
+        // Короткі руїни в секторах між коридорами — декорація, не перешкода шляху.
+        var rng = new System.Random(9137);
+        for (int i = 0; i < 24; i++)
+        {
+            float a = (i % 8 * 45f + 22.5f + (float)rng.NextDouble() * 8f - 4f) * Mathf.Deg2Rad;
+            float r = 32f + (float)rng.NextDouble() * 40f;
+            Vector3 center = new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
+            Quaternion rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 180f, 0f);
+            float height = 2.8f + (float)rng.NextDouble() * 1.6f;
+            CreateRotatedBox(root, "TempleWall_" + wallIndex++,
+                center + Vector3.up * (height * 0.5f),
+                new Vector3(1.4f, height, 8f), rotation, wallMat);
         }
     }
 
@@ -460,10 +463,10 @@ public static class ArenaBuilder
                 var glow = glowObject.AddComponent<Light>();
                 glow.type = LightType.Point;
                 glow.color = new Color(1f, 0.42f, 0.08f);
-                glow.intensity = 1.7f;
-                glow.range = 13f * Mathf.Max(1f, PropScale * 0.35f);
+                glow.intensity = 0.5f;
+                glow.range = 8f * Mathf.Max(1f, PropScale * 0.35f);
                 glow.shadows = LightShadows.None;
-                AuraEffect.Attach(glowObject.transform, new Color(1f, 0.42f, 0.08f, 0.35f), 3.4f);
+                AuraEffect.Attach(glowObject.transform, new Color(1f, 0.42f, 0.08f, 0.18f), 2.4f);
             }
         }
 

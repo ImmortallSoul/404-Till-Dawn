@@ -30,11 +30,17 @@ public sealed class EnemyRagdoll : MonoBehaviour
         _active++;
 
         var bones = CollectBones(visual);
+        // Зберігаємо початкову ієрархію до перебатькування — за нею відновлюємо joints.
+        var parents = OriginalParents(bones);
+        // Кінцівки не можуть лишатися дітьми одна одної: вкладені Rigidbody
+        // починають тягнути сусідні кістки й «колбаситися» після падіння.
+        ReparentBones(bones, ragdoll.transform);
         if (bones.Count >= 3)
-            ragdoll.BuildBones(bones, visual, impulse, height);
+            ragdoll.BuildBones(bones, parents, visual, impulse, height);
         else
             ragdoll.BuildParts(visual, impulse, height);
 
+        ragdoll.IgnoreSelfCollisions();
         return ragdoll;
     }
 
@@ -56,7 +62,30 @@ public sealed class EnemyRagdoll : MonoBehaviour
         return result;
     }
 
-    void BuildBones(List<Transform> bones, Transform visual, Vector3 impulse, float height)
+    static Dictionary<Transform, Transform> OriginalParents(List<Transform> bones)
+    {
+        var result = new Dictionary<Transform, Transform>();
+        for (int i = 0; i < bones.Count; i++)
+        {
+            var bone = bones[i];
+            if (bone != null && bone.parent != null && bones.Contains(bone.parent))
+                result[bone] = bone.parent;
+        }
+        return result;
+    }
+
+    static void ReparentBones(List<Transform> bones, Transform root)
+    {
+        for (int i = 0; i < bones.Count; i++)
+        {
+            var bone = bones[i];
+            if (bone != null && bone.parent != root)
+                bone.SetParent(root, true);
+        }
+    }
+
+    void BuildBones(List<Transform> bones, Dictionary<Transform, Transform> parents,
+        Transform visual, Vector3 impulse, float height)
     {
         Transform root = FindRoot(bones);
         float unit = Mathf.Max(0.05f, height / 1.8f);
@@ -67,7 +96,8 @@ public sealed class EnemyRagdoll : MonoBehaviour
             if (bone == root || IsDetail(bone.name))
                 continue;
 
-            Transform parent = bone.parent != null && bones.Contains(bone.parent) ? bone.parent : null;
+            Transform parent;
+            parents.TryGetValue(bone, out parent);
             if (parent != null && parent.GetComponent<Rigidbody>() == null && parent != root)
                 continue;
 
@@ -81,7 +111,8 @@ public sealed class EnemyRagdoll : MonoBehaviour
         {
             var body = _bodies[i];
             Transform bone = body.transform;
-            Transform parent = bone.parent != null && bones.Contains(bone.parent) ? bone.parent : null;
+            Transform parent;
+            parents.TryGetValue(bone, out parent);
             Rigidbody connected = parent != null ? parent.GetComponent<Rigidbody>() : null;
             if (connected == null)
                 continue;
@@ -90,6 +121,7 @@ public sealed class EnemyRagdoll : MonoBehaviour
             joint.connectedBody = connected;
             joint.enableCollision = false;
             joint.autoConfigureConnectedAnchor = true;
+            ConfigureJoint(joint);
         }
 
         ApplyImpulse(impulse);
@@ -124,6 +156,7 @@ public sealed class EnemyRagdoll : MonoBehaviour
             body.mass = 1.2f;
             body.linearDamping = 0.35f;
             body.angularDamping = 0.45f;
+            body.maxAngularVelocity = 8f;
 
             var box = part.AddComponent<BoxCollider>();
             box.size = Vector3.one;
@@ -134,6 +167,7 @@ public sealed class EnemyRagdoll : MonoBehaviour
                 joint.connectedBody = _bodies[0];
                 joint.autoConfigureConnectedAnchor = true;
                 joint.enableCollision = false;
+                ConfigureJoint(joint);
             }
             _bodies.Add(body);
             renderer.enabled = false;
@@ -144,6 +178,7 @@ public sealed class EnemyRagdoll : MonoBehaviour
         {
             var body = gameObject.AddComponent<Rigidbody>();
             body.mass = 2f;
+            body.maxAngularVelocity = 8f;
             var box = gameObject.AddComponent<BoxCollider>();
             box.size = new Vector3(0.5f, Mathf.Max(0.3f, height), 0.5f);
             _bodies.Add(body);
@@ -152,12 +187,47 @@ public sealed class EnemyRagdoll : MonoBehaviour
         ApplyImpulse(impulse * Mathf.Max(0.1f, unit));
     }
 
+    static void ConfigureJoint(CharacterJoint joint)
+    {
+        joint.lowTwistLimit = new SoftJointLimit { limit = -35f, bounciness = 0f };
+        joint.highTwistLimit = new SoftJointLimit { limit = 70f, bounciness = 0f };
+        joint.swing1Limit = new SoftJointLimit { limit = 55f, bounciness = 0f };
+        joint.swing2Limit = new SoftJointLimit { limit = 40f, bounciness = 0f };
+        joint.enableProjection = true;
+        joint.projectionDistance = 0.1f;
+        joint.projectionAngle = 8f;
+    }
+
+    void IgnoreSelfCollisions()
+    {
+        for (int i = 0; i < _bodies.Count; i++)
+        {
+            var a = _bodies[i];
+            if (a == null)
+                continue;
+            var ca = a.GetComponent<Collider>();
+            if (ca == null)
+                continue;
+
+            for (int j = i + 1; j < _bodies.Count; j++)
+            {
+                var b = _bodies[j];
+                if (b == null)
+                    continue;
+                var cb = b.GetComponent<Collider>();
+                if (cb != null)
+                    Physics.IgnoreCollision(ca, cb, true);
+            }
+        }
+    }
+
     void AddBody(Transform bone, Transform parent, float unit, float height)
     {
         var body = bone.gameObject.AddComponent<Rigidbody>();
         body.mass = Mathf.Clamp(0.4f + unit * 1.4f, 0.4f, 2.4f);
         body.linearDamping = 0.28f;
         body.angularDamping = 0.42f;
+        body.maxAngularVelocity = 8f;
         body.interpolation = RigidbodyInterpolation.Interpolate;
         _bodies.Add(body);
 
@@ -242,18 +312,38 @@ public sealed class EnemyRagdoll : MonoBehaviour
         if (_life < 1f && !_released)
         {
             _released = true;
-            // Останню секунду тіло осідає: колайдери вимикаємо, щоб не блокувати ботів.
-            for (int i = 0; i < _bodies.Count; i++)
-            {
-                if (_bodies[i] == null)
-                    continue;
-                var collider = _bodies[i].GetComponent<Collider>();
-                if (collider != null)
-                    collider.enabled = false;
-            }
+            Freeze();
         }
         if (_life <= 0f)
             Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// Заморозка замість вимкнення колайдерів: тіло лишається на місці й не
+    /// провалюється крізь підлогу, коли з'єднання втрачають опору.
+    /// </summary>
+    void Freeze()
+    {
+        for (int i = 0; i < _bodies.Count; i++)
+        {
+            var body = _bodies[i];
+            if (body == null)
+                continue;
+
+            var joints = body.GetComponents<CharacterJoint>();
+            for (int j = 0; j < joints.Length; j++)
+                joints[j].connectedBody = null;
+
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.isKinematic = true;
+
+            var collider = body.GetComponent<Collider>();
+            if (collider != null)
+                collider.isTrigger = true;
+
+            body.Sleep();
+        }
     }
 
     void OnDestroy()

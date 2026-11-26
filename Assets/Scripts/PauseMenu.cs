@@ -51,7 +51,7 @@ public class PauseMenu : MonoBehaviour
         if (session.State != RunState.Paused)
             return;
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (Input.GetKeyDown(KeyCode.Escape) && !FirstPersonController.EscapeModifierHeld())
         {
             if (_confirmExit)
                 _confirmExit = false;

@@ -255,19 +255,21 @@ public class EnemySpawner : MonoBehaviour
 
         Vector3 player = session.Player.transform.position;
         float limit = ArenaBuilder.WalkLimit;
-        // Спавн завжди відбувається за межею туману: навіть у полі зору
-        // ворог з'являється невидимим і підходить уже в межах видимості.
-        float minRadius = 44f;
-        float maxRadius = 54f;
+
+        // У храмі моби з'являються ближче, але обов'язково за стіною —
+        // так вони одразу починають шлях, а не стоять у тумані за 50 м.
+        bool temple = GameSession.SelectedMap == MapType.Temple;
+        float minRadius = temple ? 14f : 44f;
+        float maxRadius = temple ? 24f : 54f;
         if (tier == EnemyTier.Elite)
         {
-            minRadius = 46f;
-            maxRadius = 58f;
+            minRadius = temple ? 16f : 46f;
+            maxRadius = temple ? 28f : 58f;
         }
         else if (tier == EnemyTier.Boss)
         {
-            minRadius = 48f;
-            maxRadius = 64f;
+            minRadius = temple ? 18f : 48f;
+            maxRadius = temple ? 32f : 64f;
         }
         var fps = session.Player.GetComponent<FirstPersonController>();
         var camera = fps != null ? fps.GetComponentInChildren<Camera>() : null;
@@ -287,32 +289,43 @@ public class EnemySpawner : MonoBehaviour
         }
 
         Vector3? chosen = null;
-        for (int attempt = 0; attempt < 16 && !chosen.HasValue; attempt++)
+        int attempts = temple ? 40 : 16;
+        for (int attempt = 0; attempt < attempts && !chosen.HasValue; attempt++)
         {
             Vector2 circle = Random.insideUnitCircle.normalized;
             Vector3 dir = new Vector3(circle.x, 0f, circle.y);
             float radius = Random.Range(minRadius, maxRadius);
-            // Усі радіуси ≥44 м, тож навіть у конусі зору моб ховається туманом.
-            if (radius < SpawnSafeDistance && Vector3.Angle(forward, dir) < halfFov)
+            // У звичайних мапах усі радіуси ≥44 м, тож навіть у конусі зору
+            // моб ховається туманом. У храмі його ховає стіна.
+            if (!temple && radius < SpawnSafeDistance && Vector3.Angle(forward, dir) < halfFov)
                 continue;
 
             Vector3 candidate = Candidate(player, dir, radius, limit);
             if (Blocked(candidate))
                 continue;
-            if ((candidate - player).sqrMagnitude < SpawnSafeDistance * SpawnSafeDistance)
+            if (!temple && (candidate - player).sqrMagnitude < SpawnSafeDistance * SpawnSafeDistance)
+                continue;
+            if (temple && !BehindTempleWall(player, candidate))
                 continue;
             chosen = candidate;
         }
 
-        // Якщо навколо щільний лабіринт — жорсткий fallback строго за спиною.
-        for (int attempt = 0; attempt < 8 && !chosen.HasValue; attempt++)
+        // Резерв: трохи далі, але все одно за стіною.
+        for (int attempt = 0; attempt < (temple ? 16 : 8) && !chosen.HasValue; attempt++)
         {
             Vector3 dir = Quaternion.Euler(0f, 180f + Random.Range(-55f, 55f), 0f) * forward;
-            Vector3 candidate = Candidate(player, dir, Random.Range(minRadius, maxRadius), limit);
-            if (!Blocked(candidate))
+            // Храмовий резерв лишається близьким: не далі, ніж максимальний
+            // радіус босів, але обов'язково за стіною.
+            float radius = temple ? Random.Range(30f, 32f) : Random.Range(minRadius, maxRadius);
+            Vector3 candidate = Candidate(player, dir, radius, limit);
+            if (Blocked(candidate))
+                continue;
+            if (!temple || BehindTempleWall(player, candidate))
                 chosen = candidate;
         }
 
+        // Якщо за стіною немає місця — хвиля просто пропускає цього моба.
+        // Вимога «тільки за стінами» важливіша за кількість спавнів.
         if (chosen.HasValue)
             Enemy.Spawn(chosen.Value, kind, tier, skeletonVisual);
     }
@@ -324,6 +337,30 @@ public class EnemySpawner : MonoBehaviour
         pos.z = Mathf.Clamp(pos.z, -limit, limit);
         pos.y = 0f;
         return pos;
+    }
+
+    /// <summary>Точка спавну в храмі має бути прихована стіною від гравця.</summary>
+    static bool BehindTempleWall(Vector3 player, Vector3 candidate)
+    {
+        Vector3 from = player + Vector3.up * 1.6f;
+        Vector3 to = candidate + Vector3.up * 1.2f;
+        Vector3 delta = to - from;
+        float distance = delta.magnitude;
+        if (distance < 0.5f)
+            return false;
+
+        RaycastHit hit;
+        if (!Physics.Linecast(from, to, out hit, Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore))
+            return false;
+        if (hit.distance >= distance - 0.25f)
+            return false;
+
+        if (hit.collider == null)
+            return false;
+        string name = hit.collider.gameObject.name;
+        return name.StartsWith("TempleWall", System.StringComparison.Ordinal)
+               || name.StartsWith("MazeWall", System.StringComparison.Ordinal);
     }
 
     static bool Blocked(Vector3 pos)
